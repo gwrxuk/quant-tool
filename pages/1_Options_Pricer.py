@@ -5,9 +5,34 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from core.pricing import bs_price, heston_price, implied_vol
 from core.greeks import all_greeks
+from core.market_data import POPULAR_TICKERS, get_live_params
 
 st.set_page_config(page_title="Options Pricer", layout="wide")
 st.title("Options Pricer & Greeks Calculator")
+
+# ── Live Data Sidebar ────────────────────────────────────────────────────
+st.sidebar.header("Live Market Data")
+_lp_ticker = st.sidebar.selectbox("Ticker", POPULAR_TICKERS, index=0, key="op_ticker")
+_op_prev = st.session_state.get("op_loaded_ticker")
+if st.sidebar.button("Load Live Data", key="op_load") or (
+    _op_prev is not None and _op_prev != _lp_ticker
+):
+    with st.sidebar:
+        with st.spinner("Fetching…"):
+            _op_lp = get_live_params(_lp_ticker)
+            st.session_state["op_params"] = _op_lp
+            st.session_state["op_loaded_ticker"] = _lp_ticker
+            for _k in ("bs_S", "bs_K", "bs_r", "bs_sigma",
+                        "h_S", "h_K", "h_r", "h_v0",
+                        "p_K", "p_r", "p_sigma"):
+                st.session_state.pop(_k, None)
+_lp = st.session_state.get("op_params", {})
+_def_S = _lp.get("spot", 100.0)
+_def_sigma = _lp.get("sigma", 0.20)
+_def_r = _lp.get("r", 0.05)
+if _lp:
+    st.sidebar.caption(f"**{_lp.get('name', _lp_ticker)}** — ${_def_S:.2f}")
+st.sidebar.divider()
 
 tab_bs, tab_heston, tab_profiles = st.tabs(["Black-Scholes", "Heston Model", "Greeks Profiles"])
 
@@ -16,11 +41,11 @@ with tab_bs:
     col_input, col_result = st.columns([1, 2])
     with col_input:
         st.subheader("Parameters")
-        S = st.number_input("Spot Price (S)", value=100.0, step=1.0, key="bs_S")
-        K = st.number_input("Strike (K)", value=100.0, step=1.0, key="bs_K")
+        S = st.number_input("Spot Price (S)", value=_def_S, step=1.0, key="bs_S")
+        K = st.number_input("Strike (K)", value=float(round(_def_S)), step=1.0, key="bs_K")
         T = st.number_input("Time to Expiry (years)", value=0.25, step=0.01, min_value=0.001, key="bs_T")
-        r = st.number_input("Risk-Free Rate", value=0.05, step=0.005, format="%.4f", key="bs_r")
-        sigma = st.number_input("Volatility (σ)", value=0.20, step=0.01, format="%.4f", key="bs_sigma")
+        r = st.number_input("Risk-Free Rate", value=_def_r, step=0.005, format="%.4f", key="bs_r")
+        sigma = st.number_input("Volatility (σ)", value=_def_sigma, step=0.01, format="%.4f", key="bs_sigma")
         option_type = st.selectbox("Option Type", ["call", "put"], key="bs_type")
 
     with col_result:
@@ -50,13 +75,13 @@ with tab_heston:
     st.subheader("Heston Stochastic Volatility Model")
     col_h1, col_h2 = st.columns(2)
     with col_h1:
-        h_S = st.number_input("Spot (S)", value=100.0, step=1.0, key="h_S")
-        h_K = st.number_input("Strike (K)", value=100.0, step=1.0, key="h_K")
+        h_S = st.number_input("Spot (S)", value=_def_S, step=1.0, key="h_S")
+        h_K = st.number_input("Strike (K)", value=float(round(_def_S)), step=1.0, key="h_K")
         h_T = st.number_input("Expiry (years)", value=0.5, step=0.05, min_value=0.01, key="h_T")
-        h_r = st.number_input("Rate (r)", value=0.05, step=0.005, format="%.4f", key="h_r")
+        h_r = st.number_input("Rate (r)", value=_def_r, step=0.005, format="%.4f", key="h_r")
         h_type = st.selectbox("Type", ["call", "put"], key="h_type")
     with col_h2:
-        h_v0 = st.number_input("Initial Variance (v₀)", value=0.04, step=0.005, format="%.4f", key="h_v0")
+        h_v0 = st.number_input("Initial Variance (v₀)", value=round(_def_sigma**2, 4), step=0.005, format="%.4f", key="h_v0")
         h_kappa = st.number_input("Mean Reversion (κ)", value=2.0, step=0.1, key="h_kappa")
         h_theta = st.number_input("Long-Run Variance (θ)", value=0.04, step=0.005, format="%.4f", key="h_theta")
         h_sigma = st.number_input("Vol of Vol (σᵥ)", value=0.3, step=0.05, key="h_sigma_v")
@@ -82,17 +107,17 @@ with tab_heston:
         fig.add_trace(go.Scatter(x=strikes_h, y=heston_ivs, mode="lines+markers", name="Heston IV Smile"))
         fig.add_hline(y=np.sqrt(h_v0), line_dash="dash", annotation_text="√v₀")
         fig.update_layout(title="Heston Implied Volatility Smile", xaxis_title="Strike", yaxis_title="Implied Vol", height=450)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 # ---------- Greeks Profiles ----------
 with tab_profiles:
     st.subheader("Greeks as a Function of Spot Price")
     col_p1, col_p2 = st.columns([1, 3])
     with col_p1:
-        p_K = st.number_input("Strike", value=100.0, step=1.0, key="p_K")
+        p_K = st.number_input("Strike", value=float(round(_def_S)), step=1.0, key="p_K")
         p_T = st.number_input("Expiry (y)", value=0.25, step=0.05, min_value=0.01, key="p_T")
-        p_r = st.number_input("Rate", value=0.05, step=0.005, format="%.4f", key="p_r")
-        p_sigma = st.number_input("Vol", value=0.20, step=0.01, format="%.4f", key="p_sigma")
+        p_r = st.number_input("Rate", value=_def_r, step=0.005, format="%.4f", key="p_r")
+        p_sigma = st.number_input("Vol", value=_def_sigma, step=0.01, format="%.4f", key="p_sigma")
         p_type = st.selectbox("Type", ["call", "put"], key="p_type")
         p_range = st.slider("Spot Range (% around strike)", 10, 50, 30, key="p_range")
 
@@ -116,7 +141,7 @@ with tab_profiles:
                           row=r_pos, col=c_pos)
             fig.add_vline(x=p_K, line_dash="dot", line_color="gray", row=r_pos, col=c_pos)
         fig.update_layout(height=900, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         st.subheader("Option Price Profile")
         fig_price = go.Figure()
@@ -125,7 +150,7 @@ with tab_profiles:
         fig_price.add_trace(go.Scatter(x=spots, y=payoff, name="Intrinsic Value", line=dict(color="#999", dash="dash")))
         fig_price.add_vline(x=p_K, line_dash="dot", line_color="gray")
         fig_price.update_layout(xaxis_title="Spot", yaxis_title="Value", height=400)
-        st.plotly_chart(fig_price, use_container_width=True)
+        st.plotly_chart(fig_price, width="stretch")
 
         st.divider()
         st.subheader("Greeks vs Time to Expiry")
@@ -147,7 +172,7 @@ with tab_profiles:
                             xaxis_title="T (years)", xaxis2_title="T (years)",
                             xaxis3_title="T (years)", xaxis4_title="T (years)",
                             xaxis5_title="T (years)", xaxis6_title="T (years)")
-        st.plotly_chart(fig_t, use_container_width=True)
+        st.plotly_chart(fig_t, width="stretch")
 
         st.divider()
         st.subheader("Greeks vs Volatility")
@@ -169,4 +194,4 @@ with tab_profiles:
                             xaxis_title="Vol (%)", xaxis2_title="Vol (%)",
                             xaxis3_title="Vol (%)", xaxis4_title="Vol (%)",
                             xaxis5_title="Vol (%)", xaxis6_title="Vol (%)")
-        st.plotly_chart(fig_v, use_container_width=True)
+        st.plotly_chart(fig_v, width="stretch")

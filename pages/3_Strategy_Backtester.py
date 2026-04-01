@@ -8,9 +8,34 @@ from core.backtesting import (
     backtest_strategy_from_data, simulate_gbm, STRATEGY_TEMPLATES,
 )
 from core.pricing import bs_price
+from core.market_data import POPULAR_TICKERS, get_live_params
 
 st.set_page_config(page_title="Strategy Backtester", layout="wide")
 st.title("Options Strategy Backtester")
+
+# ── Live Data Sidebar ────────────────────────────────────────────────────
+st.sidebar.header("Live Market Data")
+_bt_ticker = st.sidebar.selectbox("Ticker", POPULAR_TICKERS, index=0, key="bt_ticker")
+_bt_prev = st.session_state.get("bt_loaded_ticker")
+if st.sidebar.button("Load Live Data", key="bt_load") or (
+    _bt_prev is not None and _bt_prev != _bt_ticker
+):
+    with st.sidebar:
+        with st.spinner("Fetching…"):
+            _bt_lp = get_live_params(_bt_ticker)
+            st.session_state["bt_params"] = _bt_lp
+            st.session_state["bt_loaded_ticker"] = _bt_ticker
+            for _k in ("dh_S", "dh_K", "dh_r", "dh_sigma",
+                        "strat_S", "strat_r", "strat_sigma",
+                        "hist_r", "hist_sigma"):
+                st.session_state.pop(_k, None)
+_bp = st.session_state.get("bt_params", {})
+_def_S = _bp.get("spot", 100.0)
+_def_sigma = _bp.get("sigma", 0.20)
+_def_r = _bp.get("r", 0.05)
+if _bp:
+    st.sidebar.caption(f"**{_bp.get('name', _bt_ticker)}** — ${_def_S:.2f}")
+st.sidebar.divider()
 
 tab_dh, tab_strat, tab_hist = st.tabs(["Delta Hedging", "Multi-Leg Strategies", "Historical Data"])
 
@@ -19,11 +44,11 @@ with tab_dh:
     col_d1, col_d2 = st.columns([1, 3])
     with col_d1:
         st.subheader("Parameters")
-        dh_S = st.number_input("Spot", value=100.0, step=1.0, key="dh_S")
-        dh_K = st.number_input("Strike", value=100.0, step=1.0, key="dh_K")
+        dh_S = st.number_input("Spot", value=_def_S, step=1.0, key="dh_S")
+        dh_K = st.number_input("Strike", value=float(round(_def_S)), step=1.0, key="dh_K")
         dh_T = st.number_input("Expiry (years)", value=0.25, step=0.05, min_value=0.01, key="dh_T")
-        dh_r = st.number_input("Rate", value=0.05, step=0.005, format="%.4f", key="dh_r")
-        dh_sigma = st.number_input("Volatility", value=0.20, step=0.01, format="%.4f", key="dh_sigma")
+        dh_r = st.number_input("Rate", value=_def_r, step=0.005, format="%.4f", key="dh_r")
+        dh_sigma = st.number_input("Volatility", value=_def_sigma, step=0.01, format="%.4f", key="dh_sigma")
         dh_type = st.selectbox("Option Type", ["call", "put"], key="dh_type")
         dh_freq = st.selectbox("Hedge Frequency (days)", [1, 2, 5, 10, 20], key="dh_freq")
         dh_seed = st.number_input("Seed", value=42, step=1, key="dh_seed")
@@ -72,7 +97,7 @@ with tab_dh:
                                          line=dict(color="#AA00FF", dash="dot")), row=1, col=1)
 
             fig.update_layout(height=800, showlegend=True)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
             st.subheader("Daily P&L Components")
             fig2 = go.Figure()
@@ -80,17 +105,17 @@ with tab_dh:
                 fig2.add_trace(go.Bar(x=df["day"], y=df[col_name], name=col_name.replace("_", " ").title(),
                                       marker_color=color, opacity=0.7))
             fig2.update_layout(barmode="relative", height=400, xaxis_title="Day", yaxis_title="P&L")
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, width="stretch")
 
 # ---------- Multi-Leg Strategies ----------
 with tab_strat:
     col_s1, col_s2 = st.columns([1, 3])
     with col_s1:
         st.subheader("Strategy Selection")
-        strat_S = st.number_input("Spot", value=100.0, step=1.0, key="strat_S")
+        strat_S = st.number_input("Spot", value=_def_S, step=1.0, key="strat_S")
         strat_T = st.number_input("Expiry (years)", value=0.25, step=0.05, min_value=0.01, key="strat_T")
-        strat_r = st.number_input("Rate", value=0.05, step=0.005, format="%.4f", key="strat_r")
-        strat_sigma = st.number_input("Volatility", value=0.20, step=0.01, format="%.4f", key="strat_sigma")
+        strat_r = st.number_input("Rate", value=_def_r, step=0.005, format="%.4f", key="strat_r")
+        strat_sigma = st.number_input("Volatility", value=_def_sigma, step=0.01, format="%.4f", key="strat_sigma")
         strat_name = st.selectbox("Strategy", list(STRATEGY_TEMPLATES.keys()), key="strat_name")
         strat_seed = st.number_input("Seed", value=42, step=1, key="strat_seed")
 
@@ -144,7 +169,7 @@ with tab_strat:
                     "T": f"{leg_T:.4f}", "σ": f"{leg_sigma:.2%}",
                     "Price": f"${bs_price(strat_S, p['K'], leg_T, strat_r, leg_sigma, p['option_type']):.4f}",
                 })
-            st.dataframe(pd.DataFrame(legs_data), use_container_width=True)
+            st.dataframe(pd.DataFrame(legs_data), width="stretch")
 
             c1, c2, c3 = st.columns(3)
             c1.metric("Initial Cost", f"${cost:.4f}")
@@ -165,7 +190,7 @@ with tab_strat:
             fig.add_trace(go.Scatter(x=df["day"], y=df["vega"], name="Vega",
                                      line=dict(color="#00BFA5")), row=2, col=2)
             fig.update_layout(height=700)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
             st.subheader("Payoff at Expiry")
             T_max = max(p.get("T", strat_T) for p in positions)
@@ -192,7 +217,7 @@ with tab_strat:
             fig_payoff.add_hline(y=0, line_color="gray", line_dash="dash")
             fig_payoff.add_vline(x=strat_S, line_color="gray", line_dash="dot")
             fig_payoff.update_layout(xaxis_title="Spot at Expiry", yaxis_title="P&L", height=400)
-            st.plotly_chart(fig_payoff, use_container_width=True)
+            st.plotly_chart(fig_payoff, width="stretch")
 
 # ---------- Historical Data ----------
 with tab_hist:
@@ -206,8 +231,8 @@ with tab_hist:
 
     col_h1, col_h2 = st.columns([1, 3])
     with col_h1:
-        hist_r = st.number_input("Rate", value=0.05, step=0.005, format="%.4f", key="hist_r")
-        hist_sigma = st.number_input("Volatility", value=0.20, step=0.01, format="%.4f", key="hist_sigma")
+        hist_r = st.number_input("Rate", value=_def_r, step=0.005, format="%.4f", key="hist_r")
+        hist_sigma = st.number_input("Volatility", value=_def_sigma, step=0.01, format="%.4f", key="hist_sigma")
         hist_strat = st.selectbox("Strategy", list(STRATEGY_TEMPLATES.keys()), key="hist_strat")
 
     with col_h2:
@@ -261,4 +286,4 @@ with tab_hist:
                         fig.add_trace(go.Scatter(x=df["day"], y=df["pnl"], name="P&L",
                                                  fill="tozeroy", line=dict(color="#00C853")), row=2, col=1)
                         fig.update_layout(height=600)
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width="stretch")

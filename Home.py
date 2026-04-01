@@ -43,6 +43,11 @@ with col2:
     ### Dashboard
     - **Risk Dashboard** — Portfolio risk monitoring with Monte Carlo VaR/CVaR,
       Greeks exposure by expiry and strike, and configurable alert thresholds
+
+    ### Live Data
+    - **Market Data** — Real-time quotes, interactive candlestick charts,
+      live options chains with Greeks, implied volatility surfaces from
+      market data, and major index overview
     """)
 
 st.divider()
@@ -58,4 +63,6 @@ st.markdown("""
 - **Simulation**: GBM and Heston Euler-discretized paths, historical data backtesting
 - **Risk**: Full second-order Taylor P&L attribution (incl. Vanna & Volga),
   Monte Carlo VaR, scenario stress testing, portfolio-level attribution
+- **Market Data**: Real-time quotes via yfinance, live options chains,
+  implied volatility surfaces from market data, Treasury yield risk-free rate
 """)

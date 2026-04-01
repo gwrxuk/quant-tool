@@ -5,9 +5,33 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from core.pnl import (daily_pnl_attribution, generate_sample_pnl_data,
                        pnl_summary, portfolio_pnl_attribution)
+from core.market_data import POPULAR_TICKERS, get_live_params
 
 st.set_page_config(page_title="P&L Attribution", layout="wide")
 st.title("P&L Attribution & Greeks Decomposition")
+
+# ── Live Data Sidebar ────────────────────────────────────────────────────
+st.sidebar.header("Live Market Data")
+_pa_ticker = st.sidebar.selectbox("Ticker", POPULAR_TICKERS, index=0, key="pa_ticker")
+_pa_prev = st.session_state.get("pa_loaded_ticker")
+if st.sidebar.button("Load Live Data", key="pa_load") or (
+    _pa_prev is not None and _pa_prev != _pa_ticker
+):
+    with st.sidebar:
+        with st.spinner("Fetching…"):
+            _pa_lp = get_live_params(_pa_ticker)
+            st.session_state["pa_params"] = _pa_lp
+            st.session_state["pa_loaded_ticker"] = _pa_ticker
+            for _k in ("pnl_S", "pnl_K", "pnl_r", "pnl_sigma",
+                        "pp_K", "pp_sigma", "pp_S0", "pp_r"):
+                st.session_state.pop(_k, None)
+_pp = st.session_state.get("pa_params", {})
+_def_S = _pp.get("spot", 100.0)
+_def_sigma = _pp.get("sigma", 0.20)
+_def_r = _pp.get("r", 0.05)
+if _pp:
+    st.sidebar.caption(f"**{_pp.get('name', _pa_ticker)}** — ${_def_S:.2f}")
+st.sidebar.divider()
 
 tab_single, tab_portfolio = st.tabs(["Single Position", "Portfolio Attribution"])
 
@@ -17,11 +41,11 @@ with tab_single:
 
     with col1:
         st.subheader("Position Parameters")
-        pnl_S = st.number_input("Initial Spot", value=100.0, step=1.0, key="pnl_S")
-        pnl_K = st.number_input("Strike", value=100.0, step=1.0, key="pnl_K")
+        pnl_S = st.number_input("Initial Spot", value=_def_S, step=1.0, key="pnl_S")
+        pnl_K = st.number_input("Strike", value=float(round(_def_S)), step=1.0, key="pnl_K")
         pnl_T = st.number_input("Expiry (years)", value=0.25, step=0.05, min_value=0.01, key="pnl_T")
-        pnl_r = st.number_input("Rate", value=0.05, step=0.005, format="%.4f", key="pnl_r")
-        pnl_sigma = st.number_input("Initial Vol", value=0.20, step=0.01, format="%.4f", key="pnl_sigma")
+        pnl_r = st.number_input("Rate", value=_def_r, step=0.005, format="%.4f", key="pnl_r")
+        pnl_sigma = st.number_input("Initial Vol", value=_def_sigma, step=0.01, format="%.4f", key="pnl_sigma")
         pnl_type = st.selectbox("Type", ["call", "put"], key="pnl_type")
         pnl_qty = st.number_input("Quantity", value=10, step=1, key="pnl_qty")
         pnl_days = st.slider("Simulation Days", 10, 120, 60, key="pnl_days")
@@ -68,7 +92,7 @@ with tab_single:
                     line=dict(color="black", width=2.5),
                 ))
                 fig_cum.update_layout(height=500, yaxis_title="Cumulative P&L", xaxis_title="Day")
-                st.plotly_chart(fig_cum, use_container_width=True)
+                st.plotly_chart(fig_cum, width="stretch")
 
                 st.subheader("Daily P&L Breakdown")
                 fig_daily = go.Figure()
@@ -93,7 +117,7 @@ with tab_single:
                 ))
                 fig_daily.update_layout(barmode="relative", height=400,
                                         xaxis_title="Day", yaxis_title="Daily P&L")
-                st.plotly_chart(fig_daily, use_container_width=True)
+                st.plotly_chart(fig_daily, width="stretch")
 
                 st.subheader("Spot & Implied Vol Paths")
                 fig_paths = make_subplots(rows=2, cols=1, shared_xaxes=True,
@@ -109,7 +133,7 @@ with tab_single:
                     line=dict(color="#FF6D00"),
                 ), row=2, col=1)
                 fig_paths.update_layout(height=450)
-                st.plotly_chart(fig_paths, use_container_width=True)
+                st.plotly_chart(fig_paths, width="stretch")
 
                 st.subheader("Greeks Over Time")
                 fig_greeks = make_subplots(rows=2, cols=2,
@@ -120,11 +144,11 @@ with tab_single:
                 fig_greeks.add_trace(go.Scatter(x=df["day"], y=df["vega"], line=dict(color="#FF6D00")), row=2, col=1)
                 fig_greeks.add_trace(go.Scatter(x=df["day"], y=df["theta"], line=dict(color="#D50000")), row=2, col=2)
                 fig_greeks.update_layout(height=500, showlegend=False)
-                st.plotly_chart(fig_greeks, use_container_width=True)
+                st.plotly_chart(fig_greeks, width="stretch")
 
                 st.subheader("P&L Summary Statistics")
                 summary = pnl_summary(df)
-                st.dataframe(summary.style.format("{:.4f}"), use_container_width=True)
+                st.dataframe(summary.style.format("{:.4f}"), width="stretch")
 
 # ---------- Portfolio Attribution ----------
 with tab_portfolio:
@@ -136,9 +160,9 @@ with tab_portfolio:
 
     col_pa, col_pb = st.columns(2)
     with col_pa:
-        pp_K = st.number_input("Strike", value=100.0, step=1.0, key="pp_K")
+        pp_K = st.number_input("Strike", value=float(round(_def_S)), step=1.0, key="pp_K")
         pp_T = st.number_input("Expiry (years)", value=0.25, step=0.05, min_value=0.01, key="pp_T")
-        pp_sigma = st.number_input("Implied Vol", value=0.20, step=0.01, format="%.4f", key="pp_sigma")
+        pp_sigma = st.number_input("Implied Vol", value=_def_sigma, step=0.01, format="%.4f", key="pp_sigma")
     with col_pb:
         pp_type = st.selectbox("Type", ["call", "put"], key="pp_type")
         pp_qty = st.number_input("Quantity", value=10, step=1, key="pp_qty")
@@ -165,13 +189,13 @@ with tab_portfolio:
 
     positions = st.session_state["port_positions"]
     if positions:
-        st.dataframe(pd.DataFrame(positions), use_container_width=True)
+        st.dataframe(pd.DataFrame(positions), width="stretch")
 
         col_ps1, col_ps2 = st.columns([1, 3])
         with col_ps1:
-            pp_S0 = st.number_input("Spot", value=100.0, step=1.0, key="pp_S0")
+            pp_S0 = st.number_input("Spot", value=_def_S, step=1.0, key="pp_S0")
             pp_days = st.slider("Days", 10, 120, 60, key="pp_days")
-            pp_r = st.number_input("Rate", value=0.05, step=0.005, format="%.4f", key="pp_r")
+            pp_r = st.number_input("Rate", value=_def_r, step=0.005, format="%.4f", key="pp_r")
             pp_spot_vol = st.slider("Spot Vol", 0.005, 0.05, 0.015, 0.001, key="pp_sv")
             pp_iv_drift = st.slider("IV Drift", 0.0005, 0.01, 0.002, 0.0005, key="pp_ivd")
             pp_seed = st.number_input("Seed", value=42, step=1, key="pp_seed")
@@ -209,7 +233,7 @@ with tab_portfolio:
                         line=dict(color="black", width=2.5),
                     ))
                     fig_agg.update_layout(height=500, yaxis_title="Cumulative P&L", xaxis_title="Day")
-                    st.plotly_chart(fig_agg, use_container_width=True)
+                    st.plotly_chart(fig_agg, width="stretch")
 
                     st.subheader("Per-Position Breakdown")
                     for i, pdf in enumerate(per_pos):
@@ -235,11 +259,11 @@ with tab_portfolio:
                                     line=dict(color="black", width=2),
                                 ))
                             fig_pos.update_layout(height=350)
-                            st.plotly_chart(fig_pos, use_container_width=True)
+                            st.plotly_chart(fig_pos, width="stretch")
 
                     st.subheader("Portfolio P&L Summary")
                     summary = pnl_summary(agg)
                     if not isinstance(summary, dict) or isinstance(summary, pd.DataFrame):
-                        st.dataframe(summary.style.format("{:.4f}"), use_container_width=True)
+                        st.dataframe(summary.style.format("{:.4f}"), width="stretch")
     else:
         st.info("Add positions above or load the sample portfolio.")

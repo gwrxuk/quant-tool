@@ -6,9 +6,43 @@ from plotly.subplots import make_subplots
 from core.pricing import bs_price
 from core.greeks import all_greeks
 from core.backtesting import simulate_gbm
+from core.market_data import POPULAR_TICKERS, get_live_params
 
 st.set_page_config(page_title="Risk Dashboard", layout="wide")
 st.title("Real-Time Risk Dashboard")
+
+# ── Live Data Sidebar ────────────────────────────────────────────────────
+st.sidebar.header("Live Market Data")
+_rd_ticker = st.sidebar.selectbox("Ticker", POPULAR_TICKERS, index=0, key="rd_ticker")
+
+_prev_ticker = st.session_state.get("rd_loaded_ticker")
+_need_load = st.sidebar.button("Load Live Data", key="rd_load") or (
+    _prev_ticker is not None and _prev_ticker != _rd_ticker
+)
+
+if _need_load:
+    with st.sidebar:
+        with st.spinner("Fetching…"):
+            lp = get_live_params(_rd_ticker)
+            st.session_state["rd_params"] = lp
+            st.session_state["rd_loaded_ticker"] = _rd_ticker
+            _s = lp["spot"]
+            _r = lp["r"]
+            _sig = lp["sigma"]
+            st.session_state["book"] = [
+                {"label": "ATM Call 1M", "S": _s, "K": float(round(_s)), "T": 1/12, "r": _r, "sigma": _sig, "option_type": "call", "quantity": 50},
+                {"label": "OTM Put 1M", "S": _s, "K": float(round(_s * 0.95)), "T": 1/12, "r": _r, "sigma": round(_sig * 1.1, 4), "option_type": "put", "quantity": -30},
+                {"label": "ITM Call 3M", "S": _s, "K": float(round(_s * 0.95)), "T": 0.25, "r": _r, "sigma": round(_sig * 0.9, 4), "option_type": "call", "quantity": 20},
+                {"label": "ATM Put 3M", "S": _s, "K": float(round(_s)), "T": 0.25, "r": _r, "sigma": _sig, "option_type": "put", "quantity": -25},
+                {"label": "OTM Call 6M", "S": _s, "K": float(round(_s * 1.1)), "T": 0.5, "r": _r, "sigma": round(_sig * 0.95, 4), "option_type": "call", "quantity": 15},
+                {"label": "Deep OTM Put 6M", "S": _s, "K": float(round(_s * 0.85)), "T": 0.5, "r": _r, "sigma": round(_sig * 1.4, 4), "option_type": "put", "quantity": 40},
+            ]
+            st.rerun()
+
+_rp = st.session_state.get("rd_params", {})
+if _rp:
+    st.sidebar.caption(f"**{_rp.get('name', _rd_ticker)}** — ${_rp.get('spot', 0):.2f}")
+st.sidebar.divider()
 
 SAMPLE_BOOK = [
     {"label": "ATM Call 1M", "S": 100, "K": 100, "T": 1/12, "r": 0.05, "sigma": 0.20, "option_type": "call", "quantity": 50},
@@ -26,6 +60,7 @@ book = st.session_state["book"]
 
 if st.sidebar.button("Reset to Sample Book"):
     st.session_state["book"] = SAMPLE_BOOK.copy()
+    st.session_state.pop("rd_params", None)
     st.rerun()
 
 var_confidence = st.sidebar.slider("VaR Confidence", 0.90, 0.99, 0.95, 0.01)
@@ -77,7 +112,7 @@ tab_book, tab_var, tab_exposure, tab_alerts = st.tabs([
 
 with tab_book:
     st.subheader("Current Positions")
-    st.dataframe(pd.DataFrame(position_details), use_container_width=True)
+    st.dataframe(pd.DataFrame(position_details), width="stretch")
 
     fig_pie = make_subplots(rows=1, cols=2, specs=[[{"type": "pie"}, {"type": "pie"}]],
                             subplot_titles=["Value Contribution", "Delta Contribution"])
@@ -87,7 +122,7 @@ with tab_book:
     fig_pie.add_trace(go.Pie(labels=labels, values=values_abs, hole=0.4), row=1, col=1)
     fig_pie.add_trace(go.Pie(labels=labels, values=deltas_abs, hole=0.4), row=1, col=2)
     fig_pie.update_layout(height=400)
-    st.plotly_chart(fig_pie, use_container_width=True)
+    st.plotly_chart(fig_pie, width="stretch")
 
 with tab_var:
     st.subheader(f"Value at Risk ({var_confidence:.0%}, {var_horizon}d)")
@@ -132,14 +167,14 @@ with tab_var:
         title=f"P&L Distribution ({n_simulations:,} simulations, {var_horizon}d horizon)",
         xaxis_title="P&L", yaxis_title="Frequency", height=500,
     )
-    st.plotly_chart(fig_var, use_container_width=True)
+    st.plotly_chart(fig_var, width="stretch")
 
     st.subheader("P&L Percentiles")
     percentiles = [1, 5, 10, 25, 50, 75, 90, 95, 99]
     pctl_vals = [np.percentile(pnl_dist, p) for p in percentiles]
     st.dataframe(
         pd.DataFrame({"Percentile": [f"{p}%" for p in percentiles], "P&L": [f"${v:.2f}" for v in pctl_vals]}).T,
-        use_container_width=True,
+        width="stretch",
     )
 
 with tab_exposure:
@@ -164,7 +199,7 @@ with tab_exposure:
             marker_color=[colors[idx] if v >= 0 else "#FF8A80" for v in vals],
         ), row=r_pos + 1, col=c_pos + 1)
     fig_exp.update_layout(height=600, showlegend=False)
-    st.plotly_chart(fig_exp, use_container_width=True)
+    st.plotly_chart(fig_exp, width="stretch")
 
     st.subheader("Greeks Exposure by Strike")
     strike_groups = {}
@@ -185,7 +220,7 @@ with tab_exposure:
             name=greek, marker_color=color,
         ))
     fig_stk.update_layout(barmode="group", height=400, yaxis_title="Exposure")
-    st.plotly_chart(fig_stk, use_container_width=True)
+    st.plotly_chart(fig_stk, width="stretch")
 
 with tab_alerts:
     st.subheader("Risk Alert Configuration")
@@ -232,4 +267,4 @@ with tab_alerts:
         {"Metric": f"VaR ({var_confidence:.0%})", "Value": f"${var_value:.2f}", "Limit": f"${max_var:.0f}",
          "Status": "BREACH" if abs(var_value) > max_var else "OK"},
     ])
-    st.dataframe(risk_df, use_container_width=True)
+    st.dataframe(risk_df, width="stretch")

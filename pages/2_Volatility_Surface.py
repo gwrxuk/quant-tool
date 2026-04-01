@@ -6,9 +6,34 @@ from core.volatility import (
     sabr_calibrate, sabr_implied_vol, dupire_local_vol,
 )
 from core.pricing import bs_price, local_vol_mc_price
+from core.market_data import POPULAR_TICKERS, get_live_params
 
 st.set_page_config(page_title="Volatility Surface", layout="wide")
 st.title("Volatility Surface & SABR Calibration")
+
+# ── Live Data Sidebar ────────────────────────────────────────────────────
+st.sidebar.header("Live Market Data")
+_vs_ticker = st.sidebar.selectbox("Ticker", POPULAR_TICKERS, index=0, key="vs_ticker")
+_vs_prev = st.session_state.get("vs_loaded_ticker")
+if st.sidebar.button("Load Live Data", key="vs_load") or (
+    _vs_prev is not None and _vs_prev != _vs_ticker
+):
+    with st.sidebar:
+        with st.spinner("Fetching…"):
+            _vs_lp = get_live_params(_vs_ticker)
+            st.session_state["vs_params"] = _vs_lp
+            st.session_state["vs_loaded_ticker"] = _vs_ticker
+            for _k in ("surf_S", "surf_bv", "sabr_F",
+                        "sm_S", "sm_base",
+                        "lv_S", "lv_bv", "lv_r"):
+                st.session_state.pop(_k, None)
+_vp = st.session_state.get("vs_params", {})
+_def_S = _vp.get("spot", 100.0)
+_def_sigma = _vp.get("sigma", 0.20)
+_def_r = _vp.get("r", 0.05)
+if _vp:
+    st.sidebar.caption(f"**{_vp.get('name', _vs_ticker)}** — ${_def_S:.2f}")
+st.sidebar.divider()
 
 tab_surface, tab_sabr, tab_smile, tab_local = st.tabs(["3D Surface", "SABR Calibration", "Vol Smile Analysis", "Local Volatility"])
 
@@ -17,8 +42,8 @@ with tab_surface:
     col_s1, col_s2 = st.columns([1, 3])
     with col_s1:
         st.subheader("Surface Parameters")
-        s_spot = st.number_input("Spot", value=100.0, step=1.0, key="surf_S")
-        s_base_vol = st.slider("Base Vol", 0.05, 0.60, 0.20, 0.01, key="surf_bv")
+        s_spot = st.number_input("Spot", value=_def_S, step=1.0, key="surf_S")
+        s_base_vol = st.slider("Base Vol", 0.05, 0.60, _def_sigma, 0.01, key="surf_bv")
         s_seed = st.number_input("Random Seed", value=42, step=1, key="surf_seed")
         if st.button("Generate Surface", key="gen_surf"):
             st.session_state["surf_generated"] = True
@@ -44,7 +69,7 @@ with tab_surface:
                 ),
                 height=650,
             )
-            st.plotly_chart(fig_3d, use_container_width=True)
+            st.plotly_chart(fig_3d, width="stretch")
 
             st.subheader("Volatility Matrix (Heatmap)")
             fig_heat = go.Figure(data=go.Heatmap(
@@ -61,14 +86,14 @@ with tab_surface:
                 xaxis_title="Strike", yaxis_title="Expiry",
                 height=400,
             )
-            st.plotly_chart(fig_heat, use_container_width=True)
+            st.plotly_chart(fig_heat, width="stretch")
 
 # ---------- SABR Calibration ----------
 with tab_sabr:
     st.subheader("SABR Model Calibration")
     col_c1, col_c2 = st.columns([1, 2])
     with col_c1:
-        sabr_F = st.number_input("Forward (F)", value=100.0, step=1.0, key="sabr_F")
+        sabr_F = st.number_input("Forward (F)", value=_def_S, step=1.0, key="sabr_F")
         sabr_T = st.number_input("Expiry (years)", value=0.25, step=0.05, min_value=0.01, key="sabr_T")
         sabr_beta = st.selectbox("Beta (β)", [0.0, 0.25, 0.5, 0.75, 1.0], index=2, key="sabr_beta")
         sabr_n_strikes = st.slider("Number of Strikes", 5, 25, 11, key="sabr_ns")
@@ -120,15 +145,15 @@ with tab_sabr:
             xaxis_title="Strike", yaxis_title="Implied Vol (%)",
             height=500,
         )
-        st.plotly_chart(fig_sabr, use_container_width=True)
+        st.plotly_chart(fig_sabr, width="stretch")
 
 # ---------- Vol Smile Analysis ----------
 with tab_smile:
     st.subheader("Volatility Smile by Expiry")
     col_sm1, col_sm2 = st.columns([1, 3])
     with col_sm1:
-        sm_S = st.number_input("Spot", value=100.0, step=1.0, key="sm_S")
-        sm_base = st.slider("ATM Vol", 0.05, 0.60, 0.20, 0.01, key="sm_base")
+        sm_S = st.number_input("Spot", value=_def_S, step=1.0, key="sm_S")
+        sm_base = st.slider("ATM Vol", 0.05, 0.60, _def_sigma, 0.01, key="sm_base")
         sm_skew = st.slider("Skew Intensity", -0.5, 0.0, -0.15, 0.01, key="sm_skew")
         sm_convex = st.slider("Smile Convexity", 0.0, 1.0, 0.4, 0.05, key="sm_conv")
 
@@ -155,7 +180,7 @@ with tab_smile:
             xaxis_title="Strike", yaxis_title="Implied Vol (%)",
             height=500,
         )
-        st.plotly_chart(fig_smile, use_container_width=True)
+        st.plotly_chart(fig_smile, width="stretch")
 
         st.subheader("Skew and Term Structure")
         moneyness = np.log(strikes_sm / sm_S)
@@ -174,7 +199,7 @@ with tab_smile:
             xaxis_title="Log(K/S)", yaxis_title="Implied Vol (%)",
             height=450,
         )
-        st.plotly_chart(fig_skew, use_container_width=True)
+        st.plotly_chart(fig_skew, width="stretch")
 
 # ---------- Local Volatility (Dupire) ----------
 with tab_local:
@@ -189,9 +214,9 @@ with tab_local:
 
     col_lv1, col_lv2 = st.columns([1, 3])
     with col_lv1:
-        lv_spot = st.number_input("Spot", value=100.0, step=1.0, key="lv_S")
-        lv_base_vol = st.slider("Base IV", 0.05, 0.60, 0.20, 0.01, key="lv_bv")
-        lv_r = st.number_input("Rate", value=0.05, step=0.005, format="%.4f", key="lv_r")
+        lv_spot = st.number_input("Spot", value=_def_S, step=1.0, key="lv_S")
+        lv_base_vol = st.slider("Base IV", 0.05, 0.60, _def_sigma, 0.01, key="lv_bv")
+        lv_r = st.number_input("Rate", value=_def_r, step=0.005, format="%.4f", key="lv_r")
         lv_seed = st.number_input("Seed", value=42, step=1, key="lv_seed")
 
     with col_lv2:
@@ -216,7 +241,7 @@ with tab_local:
             ),
             height=650,
         )
-        st.plotly_chart(fig_lv3d, use_container_width=True)
+        st.plotly_chart(fig_lv3d, width="stretch")
 
         st.subheader("Implied Vol vs Local Vol Comparison")
         mid_exp_idx = len(lv_expiries) // 2
@@ -236,7 +261,7 @@ with tab_local:
             xaxis_title="Strike", yaxis_title="Volatility (%)",
             height=450,
         )
-        st.plotly_chart(fig_cmp, use_container_width=True)
+        st.plotly_chart(fig_cmp, width="stretch")
 
         st.subheader("Local Vol Heatmap")
         fig_lv_heat = go.Figure(data=go.Heatmap(
@@ -253,4 +278,4 @@ with tab_local:
             xaxis_title="Strike", yaxis_title="Expiry",
             height=400,
         )
-        st.plotly_chart(fig_lv_heat, use_container_width=True)
+        st.plotly_chart(fig_lv_heat, width="stretch")
