@@ -28,6 +28,14 @@ POPULAR_TICKERS = [
     "SPY", "QQQ", "IWM", "GLD", "TLT", "XLF", "XLE", "XLK",
 ]
 
+INDEX_TICKERS = {
+    "SPX": "^GSPC",
+    "NDX": "^NDX",
+    "RUT": "^RUT",
+    "DJX": "^DJI",
+    "VIX": "^VIX",
+}
+
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -4,3 +4,8 @@ scipy>=1.11.0
 pandas>=2.0.0
 plotly>=5.18.0
 yfinance>=1.0.0
+
+# Broker integrations (optional — install only what you need)
+# pip install ib_async        # Interactive Brokers
+# pip install alpaca-py       # Alpaca Markets
+# pip install schwab-py       # Charles Schwab

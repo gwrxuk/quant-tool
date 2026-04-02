@@ -1,6 +1,6 @@
 # Quantitative Options Analysis Toolkit (QOAT)
 
-A containerized, interactive platform for front-office derivatives analytics — covering the full workflow from real-time market data through options pricing, volatility calibration, strategy backtesting, P&L attribution, and risk monitoring.
+A containerized, interactive platform for front-office derivatives analytics — covering the full workflow from real-time market data through options pricing, volatility calibration, strategy backtesting, P&L attribution, risk monitoring, index options analysis, and broker-connected trading.
 
 ![Home](screenshots/01_home.png)
 
@@ -41,6 +41,19 @@ Three pricing models with nine analytical Greeks and multi-dimensional sensitivi
 
 ![Volatility Surface](screenshots/03_vol_surface.png)
 ![Local Volatility](screenshots/10_local_vol_surface.png)
+
+### Index Options Analytics
+
+Dedicated tooling for cash-settled, European-style index options (SPX, NDX, RUT, VIX, XSP, DJX) with contract-specific pricing and analysis.
+
+- **European pricer** with continuous dividend yield (Merton model) and cash settlement P&L scenarios
+- **Put-call parity** checker with violation detection, arbitrage signals, and implied dividend yield extraction
+- **Term structure** of ATM implied volatility across expiries with **forward volatility** computation
+- **Skew analysis** — 25-delta risk reversal, butterfly spread, slope, and smile curvature across multiple expiries
+- **VIX options** pricing via **Black '76** on estimated VIX futures, with futures term structure (mean-reversion model) and 3D price surface
+- **Expiry calendar** — monthly, quarterly, and weekly expiry dates with contract specification reference table
+- **Section 1256 tax calculator** — 60/40 long-term/short-term blended rate with savings comparison vs equity options
+- Full contract specs: multipliers, AM/PM settlement, exchange, exercise style
 
 ### Strategy Backtester
 
@@ -84,6 +97,19 @@ Real-time portfolio monitoring with VaR, Greeks exposure, and configurable alert
 
 ![Risk Dashboard](screenshots/07_risk_dashboard.png)
 
+### Broker Integration & Trading
+
+Unified trading interface with support for multiple brokers and a zero-dependency paper trading simulator.
+
+- **Paper Trading** — built-in simulated broker with configurable starting capital, instant fills, position tracking, trade log, and account reset
+- **Interactive Brokers (IBKR)** — via `ib_async` connecting to TWS or IB Gateway (port 7496 live / 7497 paper)
+- **Alpaca** — via `alpaca-py` for equities and crypto with API key authentication
+- **Schwab** — via `schwab-py` with OAuth flow for equities and options
+- **Order management** — market, limit, stop, and stop-limit orders with real-time status tracking
+- **Position monitoring** — current holdings with unrealized P&L, market value, and cost basis
+- **Trade analytics** — order history, fill distribution, volume by symbol, and capital allocation charts
+- Abstract `BrokerBase` interface for adding custom broker integrations
+
 ## Quick Start
 
 ### With Docker (recommended)
@@ -103,6 +129,18 @@ pip install -r requirements.txt
 streamlit run Home.py
 ```
 
+### Broker Setup (optional)
+
+Broker SDK packages are optional — install only the ones you need:
+
+```bash
+pip install ib_async       # Interactive Brokers
+pip install alpaca-py      # Alpaca Markets
+pip install schwab-py      # Charles Schwab
+```
+
+Paper Trading requires no additional dependencies.
+
 ### Stopping
 
 ```bash
@@ -121,7 +159,9 @@ quant-tool/
 │   ├── 4_Scenario_Simulator.py  # Stress testing and P&L heatmaps
 │   ├── 5_PnL_Attribution.py     # Single-position and portfolio P&L
 │   ├── 6_Risk_Dashboard.py      # VaR, Greeks exposure, risk alerts
-│   └── 7_Market_Data.py         # Live quotes, charts, options, IV surface
+│   ├── 7_Market_Data.py         # Live quotes, charts, options, IV surface
+│   ├── 8_Index_Options.py       # Index options analytics and VIX pricing
+│   └── 9_Broker.py              # Broker integration and trading
 ├── core/
 │   ├── pricing.py               # BS, Heston, Local Vol pricing engines
 │   ├── greeks.py                # Analytical and numerical Greeks
@@ -129,7 +169,9 @@ quant-tool/
 │   ├── backtesting.py           # GBM/Heston simulation, strategy engines
 │   ├── scenarios.py             # Scenario and stress testing
 │   ├── pnl.py                   # P&L attribution engine
-│   └── market_data.py           # Live quotes, options chains, IV surfaces
+│   ├── market_data.py           # Live quotes, options chains, IV surfaces
+│   ├── index_options.py         # Index options pricing, skew, term structure
+│   └── broker.py                # Broker abstraction layer (IBKR, Alpaca, Schwab)
 ├── screenshots/                 # UI screenshots for documentation
 ├── Dockerfile
 ├── docker-compose.yml
@@ -148,6 +190,5 @@ The `core/` modules are independent of Streamlit and can be imported into Jupyte
 | Numerical | NumPy, SciPy |
 | Data | Pandas |
 | Visualization | Plotly |
+| Brokers | ib_async, alpaca-py, schwab-py (optional) |
 | Containerization | Docker |
-
-

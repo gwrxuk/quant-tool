@@ -25,6 +25,9 @@ with col1:
       sensitivity profiles (vs Spot, Time, and Volatility)
     - **Volatility Surface** — Interactive 3D implied and local vol surface
       construction, SABR calibration, Dupire local vol extraction, and smile analysis
+    - **Index Options** — SPX, NDX, RUT, VIX cash-settled European pricing,
+      put-call parity, term structure with forward vols, skew analysis,
+      VIX futures pricing (Black '76), expiry calendar, and §1256 tax calculator
 
     ### Strategy & Backtesting
     - **Strategy Backtester** — 8 strategy templates (straddles, strangles,
@@ -48,6 +51,11 @@ with col2:
     - **Market Data** — Real-time quotes, interactive candlestick charts,
       live options chains with Greeks, implied volatility surfaces from
       market data, and major index overview
+
+    ### Broker Integration
+    - **Broker** — Unified trading interface for Interactive Brokers, Alpaca,
+      and Schwab with built-in paper trading, order management, position
+      tracking, and trade analytics
     """)
 
 st.divider()
@@ -55,9 +63,11 @@ st.divider()
 st.markdown("""
 ### Technical Stack
 - **Pricing Models**: Black-Scholes, Heston (characteristic function integration),
-  Dupire Local Volatility (Monte Carlo), SABR
+  Dupire Local Volatility (Monte Carlo), SABR, Black '76 (VIX futures)
 - **Greeks**: Analytical (BS) and numerical (finite difference) — Delta, Gamma, Vega,
-  Theta, Rho, Vanna, Volga, Charm, Speed
+  Theta, Rho, Vanna, Volga, Charm, Speed — with continuous dividend yield support
+- **Index Options**: European pricing with dividend yield, put-call parity verification,
+  term structure & forward vol extraction, skew metrics (25Δ risk reversal, butterfly)
 - **Volatility**: Cubic spline surface interpolation, SABR calibration (Hagan et al. 2002),
   Dupire local vol extraction
 - **Simulation**: GBM and Heston Euler-discretized paths, historical data backtesting
@@ -65,4 +75,6 @@ st.markdown("""
   Monte Carlo VaR, scenario stress testing, portfolio-level attribution
 - **Market Data**: Real-time quotes via yfinance, live options chains,
   implied volatility surfaces from market data, Treasury yield risk-free rate
+- **Broker Integration**: IBKR (ib_async), Alpaca (alpaca-py), Schwab (schwab-py),
+  and built-in paper trading with order management and position tracking
 """)
